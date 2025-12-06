@@ -1,7 +1,7 @@
 // Implements a database similar to SmallGroups
 
 
-intrinsic GetSmallFusionSystemDirectory() -> MonStgElt
+intrinsic SetSmallFusionSystemDirectory() -> MonStgElt
 	{Returns the path to the database}
 	return GetCurrentDirectory();
 end intrinsic
@@ -73,7 +73,7 @@ intrinsic IdentifyFusionSystem(F::FusionSystem) -> SeqEnum
 		F_i := SmallFusionSystem(#S, i);
 		if IsIsomorphic(F_i, F) then
 			index := <#S, i>;
-			printf "Input fusion system is small fusion system <%o, %o> \n";
+			printf "Input fusion system is small fusion system %o \n", index;
 			return index;
 		end if;
 	end for;
