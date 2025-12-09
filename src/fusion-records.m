@@ -36,13 +36,13 @@ function FusionToRecord(FS)
 	EssentialSeq := [];
     for i in [1..#FS`essentials] do
     	AutFE := FS`essentialautos[i];
-        E := FS`essentials[i];
-        R := [S!w:w in PCGenerators(E)];
+        E := Group(AutFE);
+        R := {S!w:w in PCGenerators(E)};
 	    E:=sub<S|R>;
 	    E_gens := SetToSequence(PCGenerators(E));
 	    image_gens := [];
 	    for alpha in Generators(AutFE) do 
-	    	pairs := [<S!g, S!alpha(g)> : g in E_gens];
+	    	pairs := [<g, E!alpha(g)> : g in E_gens];
 	    	Append(~image_gens, pairs);
 	    end for;
         Append(~EssentialSeq,
@@ -116,7 +116,7 @@ intrinsic WriteFusionRecord(filename::MonStgElt, FS::FusionSystem)
     	ER := R`EssentialData[i];
     	E := ER`E;
     	A := ER`AutFE_gens;
-    	rel := [S!w:w in PCGenerators(E)];
+    	rel := {S!w:w in PCGenerators(E)};
     	// We have to define E outside of the record
     	fprintf F, "\n";
     	fprintf F, "E := sub<S| %o>; \n", rel;
@@ -175,14 +175,14 @@ intrinsic LoadFusionSystem(R::Rec) -> FusionSystem
 	for E_rec in R`EssentialData do 
 		E := E_rec`E;
 		AE := AutomorphismGroup(E);
-		gens := [];
+		A := sub<AE | >;
 		for alpha in E_rec`AutFE_gens do
-			Append(~gens, AE!hom<E -> E | alpha>);
+			phi := AE!hom<E -> E | alpha>;
+			A := sub<AE | A, phi>;
 		end for;
-		A := sub<AE | gens>;
 		Append(~Autos, A);
 	end for;
-	return(CreateFusionSystem(Autos));
+	return CreateFusionSystem(Autos);
 end intrinsic;
 
 
