@@ -1,7 +1,7 @@
 # SmallFusionSystems
-A package that implements a database of known fusion systems over small $p$-groups in the spirit of the SmallGroups package. The version in this repository requires the FusionSystems package by Parker + Semeraro.
+A package that implements a database of known fusion systems over small $p$-groups in the spirit of the SmallGroups package. The version in this repository requires the FusionSystems package by Parker + Semeraro, due to this you may find some of the larger fusion systems are slow to load.
 
-This is not the latest version but rather a stable separate release, the latest version will be part of the overall fusion systems package I have been working on. Updates to the database will be occasionally incorporated and compatibility between the two should be easy to maintain. 
+This is not the latest version but rather a stable separate release, the latest version will be part of the overall fusion systems package I have been working on. Updates to the database will be occasionally incorporated and compatibility between the two should be easy to maintain, I would recommend using https://github.com/willendeavor/fusion-systems but if for any reason one absolutely needs to use the old package you can also use this. 
 
 ## Usage
 First download FusionSystems.m from https://github.com/chris1961parker/Fusion-Systems and place in the src subdirectory. Open MAGMA from the package root directory and run AttachSpec("spec"); To be able to run it from elsewhere you will have to update the file paths throughout the code, currently it assumes MAGMA has been launched from the root directory and therefore all references are based off that. This will be improved in an update very soon. Likewise this package makes use of the OS commands in order to create directories or list files so I suspect that will cause issues in different environments.
