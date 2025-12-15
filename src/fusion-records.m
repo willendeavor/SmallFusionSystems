@@ -1,6 +1,28 @@
 // Functions that convert a fusion system to an entry in the SmallFusionSystems database
 // and generally work directly with the record files
 
+
+function GetOptionalArgs()
+	optional := [
+    		"Core",
+    		"OpTriv",
+    		"pPerfect",
+    		"FocalSubgroup",
+    		"FusionGroup",
+    		"FusionGroup_name"
+    	];
+	return optional;
+end function;
+
+
+
+// Given S and a subgroup of S return the string sub<S | gens >;
+function SubgroupToString(S,T)
+	rel := {S!w:w in PCGenerators(T)};
+	return(Sprintf("sub<S | %o>", rel));
+end function;
+
+
 // Function that takes a fusion system and returns a completed fusion record
 // Idea is that the record does not do any major computations but stores enough to
 // compare different fusion systems
@@ -12,8 +34,12 @@ function FusionToRecord(FS)
 		S_name : MonStgElt,
 		S_small_group_id : Tup, 
 		EssentialData : SeqEnum,
-		OpTriv: Bool, 
-		pPerfect: Bool
+		Core: Grp, 
+		OpTriv : BoolElt,
+		pPerfect: BoolElt,
+		FocalSubgroup : Grp,
+		FusionGroup_name : MonStgElt,
+		FusionGroup : Grp
 		>;
 
 	EssentialRecord := recformat< 
@@ -56,7 +82,8 @@ function FusionToRecord(FS)
             >
         );
     end for;
-    return rec< FusionRecord |
+    // Add the minimum record information
+    R := rec< FusionRecord |
         p                := p,
         S   := S ,
         S_order          := S_order,
@@ -64,6 +91,27 @@ function FusionToRecord(FS)
         S_small_group_id := S_small_group_id,
         EssentialData    := EssentialSeq
     >;
+    // Now check any additional info
+    optional := GetOptionalArgs();
+    for x in optional do  
+    	// We deal with this outside this loop
+    	if x eq "FusionGroup_name" or x eq "FusionGroup" then 
+    		continue;
+    	end if;
+    	if assigned FS``x then
+    		// If FS``x is supposed to store a subgroup of S then get the PC presentation
+    		if ISA(Type(FS``x), Grp) then
+    			FS``x := sub<S | {S!w : w in PCGenerators(FS``x)}>;
+    		end if;
+    		R``x := FS``x;
+    	end if;
+    end for;
+    // For backwards compatability check for both and separate from other optionals
+    if assigned FS`grpsystem or assigned FS`FusionGroup then
+    	R`FusionGroup := FS`grpsystem;
+    	R`FusionGroup_name := GroupName(R`FusionGroup);
+    end if;
+    return R;
 end function;
 
 
@@ -89,8 +137,12 @@ intrinsic WriteFusionRecord(filename::MonStgElt, FS::FusionSystem)
 		S_name : MonStgElt,
 		S_small_group_id : Tup, 
 		EssentialData : SeqEnum,
-		OpTriv: Bool, 
-		pPerfect: Bool
+		Core: Grp, 
+		OpTriv : BoolElt,
+		pPerfect: BoolElt,
+		FocalSubgroup : Grp,
+		FusionGroup_name : MonStgElt,
+		FusionGroup : Grp
 		>;
 
 	EssentialRecord := recformat< 
@@ -140,13 +192,47 @@ intrinsic WriteFusionRecord(filename::MonStgElt, FS::FusionSystem)
 
     // Essentials
     fprintf F, "EssentialData := EssentialData";
-    if assigned(R`OpTriv) then
-    	fprintf F, "  , OpTriv := %o,\n", R`OpTriv;
+
+    // Optional info
+    optional := GetOptionalArgs();
+    // If no optionals defined closed records assignment
+    if forall{x : x in optional | not assigned R``x} then 
+    	fprintf F, ">;\n";
+    // Otherwise add the optionals
+    else 
+    	options := [x : x in optional | assigned R``x];
+    	fprintf F, ", \n";
+    	// Get a list of values so we can change types if necessary e.g. group to string
+    	// Not using an actual list since types vary
+    	info := AssociativeArray(options);
+    	for i in options do
+    		if ISA(Type(R``i), Grp) then
+    			// If subgroup of S then we save it as a subgroup construction
+    			if ISA(Type(R``i), GrpPC) and R``i subset S then 
+    				info[i] := SubgroupToString(S,R``i);
+    			// Otherwise it must be the FusionGroup and we save it how MAGMA likes			
+    			else
+    				// We want it as a string so create a temp file
+    				PrintFileMagma("temp_FusionGroup.m", R``i);
+    				info[i] := Read("temp_FusionGroup.m");
+    				System("rm temp_FusionGroup.m");
+    			end if;
+    		// If string then surround in quotes so is string when defined
+			elif ISA(Type(R``i), MonStgElt) then
+				info[i] := Sprintf("\"%o\"", R``i);
+    		// Otherwise straightforward saving	
+    		else
+    			info[i] := R``i;
+    		end if;
+    	end for;
+    	for i in [1..#options -1] do 
+    		x := options[i];
+    		fprintf F, "%o := %o, \n", x, info[x];
+    	end for;
+    	// Save last one so trailing comma is not added
+    	fprintf F, "%o := %o >; \n", options[#options], info[options[#options]];
     end if;
-    if assigned(R`pPerfect) then 
-    	fprintf F, "  pPerfect := %o\n", R`pPerfect;
-    end if;
-    fprintf F, ">;\n";
+
     fprintf F, "return R; \n";
     fprintf F, "end intrinsic;";
     delete F;
@@ -182,7 +268,25 @@ intrinsic LoadFusionSystem(R::Rec) -> FusionSystem
 		end for;
 		Append(~Autos, A);
 	end for;
-	return CreateFusionSystem(Autos);
+	F := CreateFusionSystem(Autos);
+	// If we can assign the optionals then do so
+	optional := GetOptionalArgs();
+	for x in optional do 
+		if x in GetAttributes(FusionSystem) and x in Names(R) then
+			if assigned R``x then
+				F``x := R``x;
+			end if; 
+		end if;
+	end for;
+	return F;
+end intrinsic;
+
+
+
+intrinsic LoadFusionSystem(filename::MonStgElt) -> FusionSystem
+	{Creates a fusion system from a database entry}
+	R := LoadFusionSystemRecord(filename);
+	return(LoadFusionSystem(R));
 end intrinsic;
 
 
@@ -196,11 +300,48 @@ end intrinsic;
 
 
 
-intrinsic LoadFusionSystem(filename::MonStgElt) -> FusionSystem
-	{Creates a fusion system from a database entry}
-	R := LoadFusionSystemRecord(filename);
-	return(LoadFusionSystem(R));
+intrinsic IsIsomorphicFusionRecords(R_1::Rec, R_2::Rec) -> Bool
+	{Given two fusion records return if they are potentially isomorphic without constructing the fusion systems}
+	// Trivial case
+	if R_1 cmpeq R_2 then 
+		return true;
+	end if;
+
+	// Check orders of everything first
+	if not #R_1`EssentialData eq #R_2`EssentialData then 
+		return false;
+	end if;
+	// We've already checked they have the same number of essentials so worry about duplicate orders
+	orders_1 := {X`E_order : X in R_1`EssentialData};
+	orders_2 := {X`E_order : X in R_2`EssentialData};
+	if not orders_1 eq orders_2 then 
+		return false;
+	end if;
+	// Now check isomorphism of the essential subgroups
+	for E_1 in R_1`EssentialData do 
+		E := E_1`E;
+		if forall{E_2`E : E_2 in R_2`EssentialData | IsIsomorphic(E, E_2`E)} then
+			return false;
+		end if;
+	end for;
+
+	for E_2 in R_2`EssentialData do 
+		E := E_2`E;
+		if forall{E_1`E : E_1 in R_1`EssentialData | IsIsomorphic(E, E_1`E)} then 
+			return false;
+		end if;
+	end for;
+
+	// Finally perform isomorphism test of the fusion systems
+	return IsIsomorphic(LoadFusionSystem(R_1), LoadFusionSystem(R_2));
 end intrinsic;
+
+
+
+
+
+
+
 
 
 
